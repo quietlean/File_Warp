@@ -1,14 +1,18 @@
 //use std::io::{self};
-use std::{process};
+//use std::{process};
 
-use crate::utils::edit_projects;
+use crate::utils::{art, edit_projects, file_check, menu_print, menu_print_intro, view_projects};
 
 // Functions are in "utils.rs".
 mod utils;
 
 fn main() {
 
-    utils::print_options();
+    art();
+
+    file_check();
+
+    menu_print_intro();
 
     //utils::open_log();
 
@@ -32,18 +36,17 @@ fn main() {
             },
             "4" => {
                 //file_read is called. If error occurs in function it's passed back to Err and printed.
-                if let Err(err) = utils::file_read() {
-                    println!("Error: {}", err);
-                    process::exit(1);
-                }
-            }
-            "5" => {
-                utils::loading();
+                //if let Err(err) = utils::file_read() {
+                //    println!("Error: {}", err);
+                //    process::exit(1);
+                //}
+
+                view_projects("y");
             },
             _ => println!("Choose valid input!"),
         }
 
-
+        menu_print();
     }
 
 

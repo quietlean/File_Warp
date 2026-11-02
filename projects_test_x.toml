@@ -1,0 +1,10 @@
+[general]
+amount = 1
+version = "0.1"
+developer = "quietlean"
+
+[project]
+name = ["t"]
+origin = ["/Users/lengather/Pictures/Inkscape"]
+destination = [["/Users/lengather/Pictures/uni"]]
+daemon = [0]
