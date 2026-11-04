@@ -9,14 +9,15 @@ use indicatif::ProgressBar;
 //use toml_edit::Value::Array;
 //use toml_edit::Item::Table;
 use std::process::Command;
-use std::path::{Path}; //, PathBuf
+use std::path::Path; //, PathBuf
 use serde::Deserialize;
 use toml_edit::{Array, DocumentMut, Item, Table, Value}; //, value
 use mac_notification_sys::*; // Sending System Notifications
-use rfd; // Opening Finder to select Folder
+//use rfd; // Opening Finder to select Folder
+use native_dialog::{DialogBuilder}; // Also a crate to display file choosers
 
 #[derive(Debug, Deserialize)]
-struct Config {
+pub struct Config {
     general: General,
     project: Project,
 }
@@ -37,17 +38,6 @@ struct Project {
     daemon: Vec<i64>
 }
 
-pub fn file_read() -> Result<(), Box<dyn Error>> {
-    //Open the file
-    let file = File::open("src/project-log-komma.csv")?;
-
-    let table = csv_to_table::from_reader(file)?.to_string();
-
-    println!("{}", table);
-
-    Ok(())
-}
-
 pub fn print_input(message: &str) -> String{
 
     //If the message is empty it wont be printed
@@ -66,6 +56,13 @@ pub fn print_input(message: &str) -> String{
 
     // trim creates a &str so you need to turn it into a String again
     input.trim().to_string()
+
+    //if input.chars().any(char::is_whitespace) == true {
+    //    println!("++ containing spaces -> not valid");
+    //    return "error".to_string();
+    //} else {
+    //    return input;
+    //}
 }
 
 pub fn menu_print_intro(){
@@ -102,11 +99,11 @@ pub fn menu_print_intro(){
     //println!("┌──────────────────────────┐");
     println!("│You have \x1b[1;95m{}\x1b[0m projects.    {}│", count, spaces); // \x1b[38;5;239mv1.0\x1b[0m
     println!("├──────────────────────────┤");
-    println!("│\x1b[1;92m1:\x1b[0m safe a project         │");
-    println!("│\x1b[1;92m2:\x1b[0m safe all projects      │");
+    println!("│\x1b[1;92m1:\x1b[0m safe all projects      │");
+    println!("│\x1b[1;92m2:\x1b[0m safe a project         │");
     println!("│\x1b[1;92m3:\x1b[0m edit projects          │");
     println!("│\x1b[1;92m4:\x1b[0m view projects          │");
-    //println!("│\x1b[1;92m5:\x1b[0m view activity log    │");
+    println!("│\x1b[1;92m5:\x1b[0m Settings               │");
     println!("│\x1b[1;92mq:\x1b[0m quit application       │");
     println!("└──────────────────────────┘");
 
@@ -117,10 +114,11 @@ pub fn menu_print_intro(){
 pub fn menu_print () {
     println!("\n");
     println!("\x1b[107;30mBack to the main menu.\x1b[0m");
-    println!("\x1b[1;92m1:\x1b[0m safe a project         ");
-    println!("\x1b[1;92m2:\x1b[0m safe all projects      ");
+    println!("\x1b[1;92m1:\x1b[0m safe all projects      ");
+    println!("\x1b[1;92m2:\x1b[0m safe a project         ");
     println!("\x1b[1;92m3:\x1b[0m edit projects          ");
     println!("\x1b[1;92m4:\x1b[0m view projects          ");
+    println!("\x1b[1;92m5:\x1b[0m Settings               ");
     println!("\x1b[1;92mq:\x1b[0m quit application       ");
 
 }
@@ -182,16 +180,107 @@ pub fn file_check(){
         println!("Notification couldnt be send: {}", error);
     }
 
-    println!("test");
+    //println!("test");
     if path_check.exists(){
         //If the log file is found the amount of projects needs to be checked.
-        println!{"File exists."};
+        //println!{"File exists."};
     } else {
         // If the log file isn't found a new one is created.
         println!("File not found.");
         if let Err(error) = File::create(path) {
             println!("Error while creating config file: {}", error);
         }
+    }
+}
+
+pub fn safe_dir (all: &str, config: Config){
+
+    if config.general.amount == 0 {
+        println!("You don't have any projects.");
+        return;
+    }
+
+    if all == "n" {
+        println!("\n\x1b[107;30mProject Overview:\x1b[0m");
+        view_projects("n");
+        println!("\n");
+        println!("Type [b] if you want to go back.");
+    }
+
+
+
+    // Array entrys can only be selected with usize numbers but amount is i64 -> its converted to usize
+    let amount = match usize::try_from(config.general.amount) {
+        Ok(v) => v,
+        Err(_) => {
+            println!("error during conversion of 'amount'");
+            return
+        },
+    };
+
+    // The index of the project in the array
+    let mut index = 0;
+    let mut count = 0;
+
+    // Input is only taken when only one project is safed
+    if all == "n" {
+        let mut input = print_input("\x1b[93;1mEnter the Number of the project you want to safe.\x1b[0m");
+
+        loop {
+
+            if input == "b" {
+                return;
+            }
+
+            match input.parse::<usize>() {
+                Ok(num) => {
+
+
+                    // checking if the number is valid
+                    if num > amount || num < 1 {
+                        input = print_input("\x1b[93;1mEnter valid input!\x1b[0m");
+                        continue;
+                    }
+                     // index is calculated
+                    index = num - 1;
+                    break;
+                }
+                Err(_) => {
+                    input = print_input("\x1b[93;1mEnter valid input!\x1b[0m");
+                    continue;
+                }
+            };
+        }
+    } else {
+        count = amount - 1;
+    }
+
+    while index <= count {
+        for dest in &config.project.destination[index] {
+
+            // copy via rsync
+            let out = match Command::new("rsync")
+                .args(["-a", "--delete", config.project.origin[index].as_str(), dest.as_str()])
+                .output()
+            {
+                Ok(out) => out,
+                Err(e) => {
+                    eprintln!("failed to run rsync: {e}");
+                    return;
+                }
+            };
+            //println!("{}", out.status);
+        }
+
+        index = index + 1;
+    }
+
+    // loop through the destinations in the array
+
+    if all == "n" {
+        println!("The project has been safed.");
+    } else {
+        println!("All projects have been safed.");
     }
 }
 
@@ -203,7 +292,7 @@ fn read_toml(path: &str) -> Result<Config, String> {
 }
 
 //open up the project toml
-fn open_toml()-> Result<Config,()> {
+pub fn open_toml()-> Result<Config,()> {
 
     match read_toml("projects_test.toml") {
         Ok(config) => {
@@ -308,16 +397,22 @@ fn change_toml (proj: Project, amount: i64) -> Result<(), Box<dyn Error>>{
     Ok(())
 }
 
+fn pick_folder () -> Option<String> {
+    let out = Command::new("osascript")
+            .arg("-e")
+            .arg(r#"POSIX path of (choose folder with prompt "Pick a folder")"#)
+            .output()
+            .ok()?;
+        if !out.status.success() {
+            return None; // user cancelled
+        }
+        let path = String::from_utf8_lossy(&out.stdout);
+        Some(path.trim().trim_end_matches('/').to_string())
+}
+
 // === ADDING PROJECT ===
 
-fn add_project(mut config: Config){
-
-    //let mut new_proj = Project {
-    //    name: Vec::new(),
-    //    origin: Vec::new(),
-    //    destination: Vec::new(),
-    //    daemon: Vec::new(),
-    //};
+fn add_project(mut config: Config, manual: &str){
 
     // I cloud also just write into the config thats passed
     let mut new_proj = config.project.clone();
@@ -325,72 +420,170 @@ fn add_project(mut config: Config){
     let input_string = print_input("\x1b[93;1mPlease enter a projectname:\x1b[0m");
     new_proj.name.push(input_string);
 
-    println!("\x1b[93;1mPlease select the directory you want to safe.\x1b[0m \x1b[1;37m[Press Enter]\x1b[0m");
-    //pause();
+    let mut new_path = String::new();
 
-    // Finder is opend
-    //let mut new_path = String::new();
-    let folder = rfd::FileDialog::new()
-            .set_title("Pick a folder")
-            .pick_folder();
+    // ORIGIN ---------------------------
 
-    let mut new_path = match folder {
-        Some(path) => {
-            println!("Selected: {}", path.display());
-            path.to_string_lossy().into_owned()
-        },
-        None => {
-            println!("New project cancled. Back to Menu.");
-            return;
-        },
-    };
+    // If manual is turned off in the settings
+    if manual == "n" {
+        println!("\x1b[93;1mPlease select the directory you want to safe.\x1b[0m \x1b[1;37m[Press Enter]\x1b[0m");
+        pause();
+
+        // Finder is opend
+        //let mut new_path = String::new();
+        //let folder = rfd::FileDialog::new()
+        //        .set_title("Pick a folder")
+        //        .pick_folder();
+
+        //let folder = DialogBuilder::file()
+        //    .add_filter("All Files", &["*"])
+        //    .open_single_dir()
+        //    .show()
+        //    .unwrap();
+        //.ok();
+
+        let folder = pick_folder();
+
+        new_path = match folder {
+            Some(path) => {
+                println!("Selected: {}", path);
+                path
+            },
+            None => {
+                println!("New project cancled. Back to Menu.");
+                return;
+            },
+        };
+    } else {
+        // Manual input of origin path
+        let mut path_str = print_input("\x1b[93;1mPlease enter the full path to the directory you want to safe:\x1b[0m");
+
+        loop {
+
+            let path = Path::new(&path_str);
+            match path.try_exists() {
+                Ok(result) => {
+                    if result == true {
+                        break;
+                    } else {
+                        path_str = print_input("\x1b[93;1mThe path you entered doesn't exist. Please enter another path:\x1b[0m");
+                    }
+                }
+                Err(_)=> {
+                    path_str = print_input("\x1b[93;1mThe path you entered doesn't exist. Please enter another path:\x1b[0m");
+                }
+            }
+        }
+
+        new_path = path_str;
+    }
+
 
     new_proj.origin.push(new_path);
 
-    println!("\x1b[93;1mPlease select the directory you want to safe the original to.\x1b[0m \x1b[1;37m[Press Enter]\x1b[0m");
-    //pause();
+    // Destination -----------------------------
+
+    if manual == "n" {
+        println!("\x1b[93;1mPlease select the directory you want to safe the original to.\x1b[0m \x1b[1;37m[Press Enter]\x1b[0m");
+        pause();
+    }
+
 
     let mut dest_vec = Vec::new();
 
-    let folder = rfd::FileDialog::new()
-            .set_title("Pick a folder")
-            .pick_folder();
 
-    match folder {
-        Some(path) => {
-            println!("Selected: {}", path.display());
-            new_path = path.to_string_lossy().into_owned();
-        },
-        None => {
-            println!("New project cancled. Back to Menu.");
-            return;
-        },
-    }
-     // Path is added to destination Vector
-    dest_vec.push(new_path);
-
-
-    let mut choice = print_input("\x1b[93;1mDo you want to add an additional Destination? [y/n]\x1b[0m");
-
+    // Loop for destination selection
     loop {
-        match choice.trim() {
-            "y" => {
-                println!("Adding additional Destionation");
-                break;
-            },
-            "n" => {
-                break;
+
+        if manual == "n" {
+            loop {
+
+                let folder = pick_folder();
+
+                new_path = match folder {
+                    Some(path) => {
+                        println!("Selected: {}", path);
+                        path
+                    },
+                    None => {
+                        println!("New project cancled. Back to Menu.");
+                        return;
+                    },
+                };
+
+                let index = new_proj.name.len();
+
+                // checks if the destination path (new_path) and the origin are the same
+                if new_path != new_proj.origin[index-1] {
+                    break;
+                }
+
+                println!("\x1b[93;1mOrigin and destination can not be the same directory. Select a different directory!\x1b[0m \x1b[1;37m[Press Enter]\x1b[0m");
+                pause();
             }
-            _ => {
-                //println!("Enter valid Input!");
-                choice = print_input("\x1b[93;1mEnter valid input! [y/n]\x1b[0m");
+        } else {
+            // Manual input of destination path
+            let mut path_str = print_input("\x1b[93;1mPlease enter the full path to the directory you want to safe the original to:\x1b[0m");
+
+            loop {
+
+
+
+                let path = Path::new(&path_str);
+                match path.try_exists() {
+                    Ok(result) => {
+                        if result == true {
+                            break;
+                        } else {
+                            path_str = print_input("\x1b[93;1mThe path you entered doesn't exist. Please enter another path:\x1b[0m");
+                        }
+                    }
+                    Err(_)=> {
+                        path_str = print_input("\x1b[93;1mThe path you entered doesn't exist. Please enter another path:\x1b[0m");
+                    }
+                }
+            }
+
+            new_path = path_str;
+        }
+
+
+
+
+         // Path is added to destination Vector
+        dest_vec.push(new_path);
+
+
+        let mut choice = print_input("\x1b[93;1mDo you want to add an additional Destination? [y/n]\x1b[0m");
+
+        loop {
+            match choice.trim() {
+                "y" => {
+                    //println!("Adding additional Destionation");
+                    break;
+                },
+                "n" => {
+                    break;
+                }
+                _ => {
+                    //println!("Enter valid Input!");
+                    choice = print_input("\x1b[93;1mEnter valid input! [y/n]\x1b[0m");
+                }
             }
         }
+
+        if choice == "n" {
+            break;
+        }
+
     }
+
 
     new_proj.destination.push(dest_vec);
 
-    choice = print_input("\x1b[93;1mDo you want to enable the daemon mode? [y/n]\x1b[0m");
+    // Dameon mode --------------------------------------
+
+    let mut choice = print_input("\x1b[93;1mDo you want to enable the daemon mode? [y/n]\x1b[0m");
     //println!("received = {}", choice);
     loop {
         match choice.trim() {
@@ -448,7 +641,7 @@ fn delete_project (mut config: Config){
     println!("\n\x1b[107;30mProject Overview:\x1b[0m");
     view_projects("n");
     println!("\n");
-    println!("Press [b] if you want to go back.");
+    println!("Type [b] if you want to go back.");
 
     // Array entrys can only be selected with usize numbers but amount is i64 -> its converted to usize
     let mut amount = match usize::try_from(config.general.amount) {
@@ -570,7 +763,7 @@ pub fn edit_projects(){
             match open_toml() {
                 Ok(config) => {
                     //string to int
-                    add_project(config);
+                    add_project(config, "n");
 
                 },
                 Err(()) => println!("couldnt add"),
@@ -603,6 +796,11 @@ pub fn view_projects (addiotional: &str) {
     match open_toml() {
         Ok(config) => {
 
+            if config.general.amount == 0 {
+                println!("You don't have any projects yet.");
+                return;
+            }
+
             // Array entrys can only be selected with usize numbers but amount is i64 -> its converted to usize
             let amount = match usize::try_from(config.general.amount) {
                 Ok(v) => v,
@@ -615,13 +813,15 @@ pub fn view_projects (addiotional: &str) {
             for proj in 0 .. amount {
                 println!("\x1b[1;95m{}]\x1b[0m {}", proj + 1, config.project.name[proj]);
 
+                let mut count = 1;
                 // In case only the names are wanted ("n")the rest is not printed
                 if addiotional == "y" {
                     println!("  origin: ");
-                    println!("  - {}", config.project.origin[proj]);
+                    println!("     {}", config.project.origin[proj]);
                     println!("  destinations:");
                     for x in &config.project.destination[proj] {
-                        println!("  - {}", x);
+                        println!("  {}] {}", count, x);
+                        count = count + 1;
                     }
                     println!("\n");
                 }
@@ -633,6 +833,12 @@ pub fn view_projects (addiotional: &str) {
         },
         Err(()) => println!("error while opening config file."),
     }
+}
+
+pub fn settings () {
+    println!("  \x1b[1;94mn:\x1b[0m adjust notifications");
+    println!("  \x1b[1;94mm:\x1b[0m adjust manual input");
+    println!("  \x1b[1;94mb:\x1b[0m go back");
 }
 
 pub fn art (){

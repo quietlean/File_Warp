@@ -1,7 +1,7 @@
 //use std::io::{self};
 //use std::{process};
 
-use crate::utils::{art, edit_projects, file_check, menu_print, menu_print_intro, view_projects};
+use crate::utils::{art, edit_projects, file_check, menu_print, menu_print_intro, safe_dir, view_projects, open_toml};
 
 // Functions are in "utils.rs".
 mod utils;
@@ -26,10 +26,27 @@ fn main() {
         match input.trim() {
             "q" => break,
             "1" => {
-                utils::file_check();
+                // safe all projects
+                match open_toml() {
+                    Ok(config) => {
+                        //string to int
+                        safe_dir("y" ,config);
+
+                    },
+                    Err(()) => println!("Error while opening config file."),
+                }
+
             },
             "2" => {
-                utils::copy();
+                // safe a project
+                match open_toml() {
+                    Ok(config) => {
+                        //string to int
+                        safe_dir("n" ,config);
+
+                    },
+                    Err(()) => println!("Error while opening config file."),
+                }
             },
             "3" => {
                 edit_projects();
@@ -43,6 +60,9 @@ fn main() {
 
                 view_projects("y");
             },
+            "5" => {
+                utils::settings();
+            }
             _ => println!("Choose valid input!"),
         }
 

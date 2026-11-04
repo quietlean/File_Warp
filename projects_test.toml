@@ -1,10 +1,10 @@
 [general]
-amount = 0
+amount = 10
 version = "0.1"
 developer = "quietlean"
 
 [project]
-name = []
-origin = []
-destination = []
-daemon = []
+name = ["111", "222222", "3333", "rtrtre", "ertrt", "trhgjdghfj", "z", "ii", "t", "zh"]
+origin = ["/Users/lengather/Pictures/moth-test/uni", "/Users/lengather/Pictures/moth-test/Bones", "/Users/lengather/Pictures/moth-test/furz", "/Users/lengather/Pictures/moth-test/Bones", "/Users/lengather/Pictures/furz", "/Users/lengather/Pictures/furz", "/Users/lengather/Pictures/furz", "/Users/lengather/Pictures/furz", "/Users/lengather/Pictures/moth-test/uni", "/Users/lengather/Pictures/moth-test/Bones"]
+destination = [["/Users/lengather/Pictures/moth-test/dest-1", "/Users/lengather/Pictures/moth-test/dest-2"], ["/Users/lengather/Pictures/moth-test/dest-2"], ["/Users/lengather/Pictures/moth-test/dest-3"], ["/Users/lengather/Pictures/moth-test/dest-3"], ["/Users/lengather/Pictures/moth-test/dest-3"], ["/Users/lengather/Pictures/moth-test/dest-1"], ["/Users/lengather/Pictures/moth-test/furz"], ["/Users/lengather/Pictures/Bones"], ["/Users/lengather/Pictures/moth-test/dest-2"], ["/Users/lengather/Pictures/moth-test/dest-2", "/Users/lengather/Pictures/moth-test/dest-1"]]
+daemon = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
